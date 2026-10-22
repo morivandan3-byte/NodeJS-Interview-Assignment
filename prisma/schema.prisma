@@ -1,0 +1,78 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Tenant {
+  id            String         @id
+  name          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  conversations Conversation[]
+  messages      Message[]
+
+  @@map("tenants")
+}
+
+model Conversation {
+  id        String    @id
+  tenantId  String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages  Message[]
+
+  @@unique([tenantId, id])
+  @@map("conversations")
+}
+
+model Message {
+  id                  String         @id
+  tenantId            String
+  conversationId      String
+  to                  String
+  text                String
+  status              MessageStatus  @default(QUEUED)
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  lastEventOccurredAt DateTime?
+  sentAt              DateTime?
+  deliveredAt         DateTime?
+  readAt              DateTime?
+  failedAt            DateTime?
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversation  Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  webhookEvents WebhookEvent[]
+
+  @@index([tenantId, conversationId, createdAt, id])
+  @@index([tenantId])
+  @@index([conversationId])
+  @@map("messages")
+}
+
+model WebhookEvent {
+  id          String        @id @default(cuid())
+  eventId     String        @unique
+  messageId   String
+  status      MessageStatus
+  occurredAt  DateTime
+  processedAt DateTime      @default(now())
+  message     Message?      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("webhook_events")
+}
